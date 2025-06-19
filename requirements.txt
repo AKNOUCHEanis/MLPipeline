@@ -1,0 +1,5 @@
+dvc==3.60.1
+dvc-s3==3.2.1
+dagshub==0.5.10
+scikit-learn==1.7.0
+mlflow==3.1.0
