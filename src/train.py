@@ -10,18 +10,23 @@ import yaml
 import pickle
 from configparser import ConfigParser
 
-import dagshub
+from dagshub import init
 
 
 
 def set_mlflow_tracking_config():
     config = ConfigParser()
-    config.read("config.ini")
+    config.read("config.init")
 
     os.environ['MLFLOW_TRACKING_URI'] = config['mlflow-tracking-credentials']['uri']
     os.environ['MLFLOW_TRACKING_USERNAME'] = config['mlflow-tracking-credentials']['username']
     os.environ['MLFLOW_TRACKONG_PASSWORD'] = config['mlflow-tracking-credentials']['password']
     os.environ['MLFLOW_TRACKING_REPO_NAME'] = config['mlflow-tracking-credentials']['repo_name']
+
+    os.environ['DAGSHUB_TOKEN'] = config['dagshub-config']['token']
+    #print(os.environ['MLFLOW_TRACKING_USERNAME'])
+
+    init(repo_owner=os.environ['MLFLOW_TRACKING_USERNAME'], repo_name=os.environ['MLFLOW_TRACKING_REPO_NAME'], mlflow=True)
 
 
 def hyperparameter_tuning(x_train, y_train, param_grid):
@@ -79,7 +84,7 @@ def train(data_path, model_path):
         print(tracking_url_type_store)
 
         if tracking_url_type_store != 'file':
-            mlflow.sklearn.log_model(best_model, "model", registered_model_name='Best Model')
+            mlflow.sklearn.log_model(best_model, artifact_path="model")#, registered_model_name='Best Model')
         else:
             mlflow.sklearn.log_model(best_model, 'model', signature=signature)
 
@@ -101,12 +106,3 @@ if __name__ == '__main__':
     model_path = params['model']
 
     train(data_path=data_path, model_path=model_path)
-
-
-
-
-
-
-
-
-
