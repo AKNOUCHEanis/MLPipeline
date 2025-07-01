@@ -9,24 +9,7 @@ import os
 import yaml
 import pickle
 from configparser import ConfigParser
-
-from dagshub import init
-
-
-
-def set_mlflow_tracking_config():
-    config = ConfigParser()
-    config.read("config.init")
-
-    os.environ['MLFLOW_TRACKING_URI'] = config['mlflow-tracking-credentials']['uri']
-    os.environ['MLFLOW_TRACKING_USERNAME'] = config['mlflow-tracking-credentials']['username']
-    os.environ['MLFLOW_TRACKONG_PASSWORD'] = config['mlflow-tracking-credentials']['password']
-    os.environ['MLFLOW_TRACKING_REPO_NAME'] = config['mlflow-tracking-credentials']['repo_name']
-
-    os.environ['DAGSHUB_TOKEN'] = config['dagshub-config']['token']
-    #print(os.environ['MLFLOW_TRACKING_USERNAME'])
-
-    init(repo_owner=os.environ['MLFLOW_TRACKING_USERNAME'], repo_name=os.environ['MLFLOW_TRACKING_REPO_NAME'], mlflow=True)
+from utils import set_mlflow_tracking_config
 
 
 def hyperparameter_tuning(x_train, y_train, param_grid):
@@ -37,19 +20,26 @@ def hyperparameter_tuning(x_train, y_train, param_grid):
     return grid_search
 
 
-def train(data_path, model_path):
+def train(x_train_path, y_train_path, model_path):
     
-    data = pd.read_csv(data_path)
-    x = data.iloc[:, :-1]
-    y = data.iloc[:, -1]
+    x = pd.read_csv(x_train_path)
+    y = pd.read_csv(y_train_path)
+
+    print(x.shape)
+    print(y.shape)
+
+    x_train, x_val, y_train, y_val = train_test_split(x, y, test_size=0.2)
+
+    x_train = x_train.values
+    y_train = y_train.values
+    x_val = x_val.values
+    y_val = y_val.values
    
     mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
     mlflow.set_experiment("training-experiment")
 
     with mlflow.start_run():
 
-        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
-        
         signature = infer_signature(x_train, y_train)
 
         param_grid = {
@@ -62,9 +52,9 @@ def train(data_path, model_path):
         grid_search  = hyperparameter_tuning(x_train, y_train, param_grid)
         best_model = grid_search.best_estimator_
 
-        y_pred = best_model.predict(x_test)
+        y_pred = best_model.predict(x_val)
 
-        accuracy = accuracy_score(y_pred, y_test)
+        accuracy = accuracy_score(y_pred, y_val)
         print(f"Accuracy score: {accuracy}")
 
         mlflow.log_metric('accuracy', accuracy)
@@ -73,36 +63,27 @@ def train(data_path, model_path):
         mlflow.log_param('best_min_samples_split', grid_search.best_params_['min_samples_split'])
         mlflow.log_param('best_min_samples_leaf', grid_search.best_params_['min_samples_leaf'])
 
-        cm = confusion_matrix(y_pred, y_test)
-        cr = classification_report(y_pred, y_test)
+        cm = confusion_matrix(y_pred, y_val)
+        cr = classification_report(y_pred, y_val)
 
         mlflow.log_text(str(cm), 'confusion_matrix.txt')
         mlflow.log_text(str(cr), 'classification_report.txt')
 
-        tracking_url_type_store = urlparse(mlflow.get_tracking_uri()).scheme
-        print(mlflow.get_tracking_uri())
-        print(tracking_url_type_store)
-
-        if tracking_url_type_store != 'file':
-            mlflow.sklearn.log_model(best_model, artifact_path="model")#, registered_model_name='Best Model')
-        else:
-            mlflow.sklearn.log_model(best_model, 'model', signature=signature)
-
         os.makedirs(os.path.dirname(model_path), exist_ok=True)
         pickle.dump(best_model, open(model_path, 'wb'))
-
         print(f"Model saved to: {model_path}")
 
 
 if __name__ == '__main__':
 
-    # set mlflow-tracking-credentials 
+    # set mlflow-tracking-credentials ls
     set_mlflow_tracking_config()
 
     # load parameters
     params = yaml.safe_load(open('params.yaml'))['train']
 
-    data_path = params['data']
+    train_x = params['x_train']
+    train_y = params['y_train']
     model_path = params['model']
 
-    train(data_path=data_path, model_path=model_path)
+    train(train_x, train_y, model_path)
