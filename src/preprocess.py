@@ -25,6 +25,6 @@ if __name__=='__main__':
 
     # load params
     params = yaml.safe_load(open('params.yaml'))['preprocess']
-    preprocess(params['input'], params['output_dir'])
+    preprocess(params['input'], params['output'])
 
     
